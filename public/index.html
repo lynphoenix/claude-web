@@ -139,6 +139,21 @@
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(3, 1fr);
         }
+        /* 10-12个终端：4列3行 */
+        .tile-container.count-10,
+        .tile-container.count-11,
+        .tile-container.count-12 {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+        }
+        /* 13-16个终端：4列4行 */
+        .tile-container.count-13,
+        .tile-container.count-14,
+        .tile-container.count-15,
+        .tile-container.count-16 {
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+        }
 
         .terminal-wrapper {
             background: #1e1e1e;
@@ -207,7 +222,7 @@
     <div class="tile-container" id="tileModeContainer"></div>
     <div class="status-bar">
         <span id="terminalInfo">Ready</span>
-        <span id="shortcutsHint" style="opacity: 0.7;">快捷键: Ctrl+Alt+1-9 切换终端 | Ctrl+Alt+Tab 循环</span>
+        <span id="shortcutsHint" style="opacity: 0.7;">快捷键: Ctrl+Alt+1-9,0 切换终端 | Ctrl+Alt+Tab 循环</span>
         <span id="dimensions">80x24</span>
     </div>
 
@@ -313,7 +328,8 @@
 
             const header = document.createElement('div');
             header.className = 'terminal-header';
-            header.innerHTML = `<span>Term ${termId.split('_')[1]}</span><span style="cursor:pointer;opacity:0.7;padding:2px 6px;" onclick="closeTerminal('${termId}', event)">✕</span>`;
+            const termNum = terminalIds.indexOf(termId) + 1;
+            header.innerHTML = `<span>Term ${termNum}</span><span style="cursor:pointer;opacity:0.7;padding:2px 6px;" onclick="closeTerminal('${termId}', event)">✕</span>`;
 
             const content = document.createElement('div');
             content.className = 'terminal-content';
@@ -354,8 +370,8 @@
 
             // 根据终端数量设置布局class
             container.className = 'tile-container visible';
-            const count = Math.min(terminalIds.length, 9); // 最多9个
-            if (count <= 9) {
+            const count = Math.min(terminalIds.length, 16); // 最多16个
+            if (count > 0) {
                 container.classList.add('count-' + count);
             }
 
@@ -393,6 +409,7 @@
                     terminalIds.push(termId);
                 }
                 createTab(termId);
+                refreshTabNames(); // 刷新所有终端编号
                 // 切换到新终端
                 switchTab(termId);
                 if (!terminal) initTerminal();
@@ -413,6 +430,7 @@
             termIds.forEach(termId => {
                 createTab(termId);
             });
+            refreshTabNames(); // 刷新所有终端编号
             if (!terminal) initTerminal();
             switchTab(active);
 
@@ -478,6 +496,7 @@
             }
             // 更新terminalIds列表
             terminalIds = terminalIds.filter(id => id !== termId);
+            refreshTabNames(); // 刷新所有终端编号
             // 如果是平铺模式，重新渲染
             if (layoutMode === 'tile') {
                 renderTiles();
@@ -489,7 +508,9 @@
             const tab = document.createElement('button');
             tab.className = 'tab';
             tab.id = 'tab-' + termId;
-            tab.innerHTML = '<span>Term ' + termId.split('_')[1] + '</span><span class="tab-close" onclick="closeTerminal(\'' + termId + '\', event)">✕</span>';
+            tab.dataset.termId = termId; // 保存termId用于动态更新编号
+            const termNum = terminalIds.indexOf(termId) + 1;
+            tab.innerHTML = '<span>Term ' + termNum + '</span><span class="tab-close" onclick="closeTerminal(\'' + termId + '\', event)">✕</span>';
             tab.onclick = () => switchTab(termId);
             container.appendChild(tab);
 
@@ -497,6 +518,30 @@
             tabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             currentTermId = termId;
+        }
+
+        // 刷新所有终端的编号显示
+        function refreshTabNames() {
+            // 刷新Tab模式的编号
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                const termId = tab.dataset.termId || tab.id.replace('tab-', '');
+                const termNum = terminalIds.indexOf(termId) + 1;
+                const nameSpan = tab.querySelector('span:first-child');
+                if (nameSpan) {
+                    nameSpan.textContent = 'Term ' + termNum;
+                }
+            });
+
+            // 刷新平铺模式的编号
+            Object.keys(terminals).forEach(termId => {
+                const wrapper = terminals[termId].wrapper;
+                const header = wrapper.querySelector('.terminal-header span:first-child');
+                if (header) {
+                    const termNum = terminalIds.indexOf(termId) + 1;
+                    header.textContent = 'Term ' + termNum;
+                }
+            });
         }
 
         function switchTab(termId) {
@@ -561,6 +606,14 @@
                 const index = parseInt(e.key) - 1;
                 if (index < terminalIds.length) {
                     switchTab(terminalIds[index]);
+                }
+            }
+
+            // Ctrl + Alt + 0 切换到第10个终端
+            if (e.ctrlKey && e.altKey && e.key === '0') {
+                e.preventDefault();
+                if (terminalIds.length >= 10) {
+                    switchTab(terminalIds[9]);
                 }
             }
 
