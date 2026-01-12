@@ -471,13 +471,13 @@
                 if (layoutMode === 'tile') {
                     // 平铺模式
                     if (terminals[termId]) {
-                        terminals[termId].term.clear(); // 先清空再写入
+                        terminals[termId].term.reset(); // 使用reset完全重置
                         terminals[termId].term.write(history);
                     }
                 } else {
                     // Tab模式：只显示当前终端的历史
                     if (terminal && termId === currentTermId) {
-                        terminal.clear(); // 确保清空后再写入
+                        terminal.reset(); // 使用reset完全重置
                         terminal.write(history);
                     }
                 }
@@ -547,12 +547,13 @@
 
         function switchTab(termId) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById('tab-' + termId).classList.add('active');
+            const tab = document.getElementById('tab-' + termId);
+            if (tab) tab.classList.add('active');
             currentTermId = termId;
             socket.emit('switch-terminal', { termId });
             // 清空终端并写入该终端的历史
             if (terminal) {
-                terminal.clear();
+                terminal.reset(); // 使用reset完全重置终端状态
                 if (terminalHistories[termId]) {
                     terminal.write(terminalHistories[termId]);
                 }
