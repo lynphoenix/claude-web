@@ -427,6 +427,7 @@
             if (!terminalHistories[termId]) {
                 terminalHistories[termId] = '';
             }
+            // 只追加新输出，避免重复
             terminalHistories[termId] += output;
 
             if (layoutMode === 'tile') {
@@ -445,7 +446,7 @@
         socket.on('terminal-history', (data) => {
             const { termId, history } = data;
             if (history) {
-                // 保存完整历史
+                // 保存完整历史（替换，不是追加）
                 terminalHistories[termId] = history;
 
                 if (layoutMode === 'tile') {
@@ -456,6 +457,7 @@
                 } else {
                     // Tab模式：只显示当前终端的历史
                     if (terminal && termId === currentTermId) {
+                        terminal.clear(); // 确保清空后再写入
                         terminal.write(history);
                     }
                 }
