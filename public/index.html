@@ -365,10 +365,20 @@
 
         socket.on('terminal-created', (data) => {
             const { termId, isInitial, isRestored } = data;
-            // 只在初始创建时创建tab，恢复时跳过（由terminals-restored处理）
-            if (isInitial) {
+            if (!isRestored) {
+                // 新创建的终端，添加到列表并创建tab
+                if (terminalIds.indexOf(termId) === -1) {
+                    terminalIds.push(termId);
+                }
                 createTab(termId);
+                // 切换到新终端
+                switchTab(termId);
                 if (!terminal) initTerminal();
+
+                // 如果是平铺模式，重新渲染
+                if (layoutMode === 'tile') {
+                    renderTiles();
+                }
             }
         });
 
