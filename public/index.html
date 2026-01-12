@@ -207,7 +207,7 @@
     <div class="tile-container" id="tileModeContainer"></div>
     <div class="status-bar">
         <span id="terminalInfo">Ready</span>
-        <span id="shortcutsHint" style="opacity: 0.7;">快捷键: Ctrl+1-9 切换终端 | Ctrl+Tab 循环</span>
+        <span id="shortcutsHint" style="opacity: 0.7;">快捷键: Ctrl+Alt+1-9 切换终端 | Ctrl+Alt+Tab 循环</span>
         <span id="dimensions">80x24</span>
     </div>
 
@@ -555,8 +555,8 @@
             // 只在tab模式下响应快捷键
             if (layoutMode === 'tile') return;
 
-            // Ctrl/Cmd + 数字键 切换到对应终端
-            if ((e.ctrlKey || e.metaKey) && e.key >= '1' && e.key <= '9') {
+            // Ctrl + Alt + 数字键 切换到对应终端
+            if (e.ctrlKey && e.altKey && e.key >= '1' && e.key <= '9') {
                 e.preventDefault();
                 const index = parseInt(e.key) - 1;
                 if (index < terminalIds.length) {
@@ -564,8 +564,8 @@
                 }
             }
 
-            // Ctrl/Cmd + Tab 循环切换终端
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Tab') {
+            // Ctrl + Alt + Tab 循环切换终端
+            if (e.ctrlKey && e.altKey && e.key === 'Tab') {
                 e.preventDefault();
                 if (terminalIds.length > 0) {
                     const currentIndex = terminalIds.indexOf(currentTermId);
