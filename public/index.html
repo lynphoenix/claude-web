@@ -92,7 +92,7 @@
         .tab:hover .tab-close { opacity: 1; }
         .tab-close:hover { background: #4e4e4e; }
 
-        /* 平铺模式容器 */
+        /* 平铺模式容器 - 自适应网格布局 */
         .tile-container {
             flex: 1;
             display: none;
@@ -102,16 +102,42 @@
         }
         .tile-container.visible {
             display: grid;
+            /* 默认2x2，会通过JavaScript动态调整 */
             grid-template-columns: repeat(2, 1fr);
             grid-template-rows: repeat(2, 1fr);
         }
-        .tile-container.visible .tile-single {
-            grid-column: 1 / -1;
-            grid-row: 1 / -1;
+        /* 1个终端：全屏 */
+        .tile-container.count-1 {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
         }
-        .tile-container.visible .tile-two {
-            grid-column: span 1;
-            grid-row: span 1;
+        /* 2个终端：上下排列 */
+        .tile-container.count-2 {
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(2, 1fr);
+        }
+        /* 3个终端：三排 */
+        .tile-container.count-3 {
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(3, 1fr);
+        }
+        /* 4个终端：田字 */
+        .tile-container.count-4 {
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+        /* 5-6个终端：3列2行 */
+        .tile-container.count-5,
+        .tile-container.count-6 {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+        /* 7-9个终端：3列3行 */
+        .tile-container.count-7,
+        .tile-container.count-8,
+        .tile-container.count-9 {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
         }
 
         .terminal-wrapper {
@@ -283,11 +309,6 @@
             const wrapper = document.createElement('div');
             wrapper.className = 'terminal-wrapper';
             wrapper.id = 'wrapper-' + termId;
-            if (terminalIds.length === 1) {
-                wrapper.classList.add('tile-single');
-            } else if (terminalIds.length === 2) {
-                wrapper.classList.add('tile-two');
-            }
 
             const header = document.createElement('div');
             header.className = 'terminal-header';
@@ -330,18 +351,20 @@
             const container = document.getElementById('tileModeContainer');
             container.innerHTML = '';
 
+            // 根据终端数量设置布局class
+            container.className = 'tile-container visible';
+            const count = Math.min(terminalIds.length, 9); // 最多9个
+            if (count <= 9) {
+                container.classList.add('count-' + count);
+            }
+
             terminalIds.forEach(termId => {
                 if (!terminals[termId]) {
                     createTileTerminal(termId);
                 } else {
-                    // 更新wrapper类名以适应终端数量
+                    // 移除旧的wrapper类名，只保留基础类
                     const wrapper = terminals[termId].wrapper;
                     wrapper.className = 'terminal-wrapper';
-                    if (terminalIds.length === 1) {
-                        wrapper.classList.add('tile-single');
-                    } else if (terminalIds.length === 2) {
-                        wrapper.classList.add('tile-two');
-                    }
                     container.appendChild(wrapper);
                     // 重新fit
                     setTimeout(() => {
