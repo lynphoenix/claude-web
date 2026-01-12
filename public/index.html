@@ -471,13 +471,13 @@
                 if (layoutMode === 'tile') {
                     // 平铺模式
                     if (terminals[termId]) {
-                        terminals[termId].term.reset(); // 使用reset完全重置
+                        terminals[termId].term.clear();
                         terminals[termId].term.write(history);
                     }
                 } else {
                     // Tab模式：只显示当前终端的历史
                     if (terminal && termId === currentTermId) {
-                        terminal.reset(); // 使用reset完全重置
+                        terminal.clear();
                         terminal.write(history);
                     }
                 }
@@ -553,8 +553,9 @@
             socket.emit('switch-terminal', { termId });
             // 清空终端并写入该终端的历史
             if (terminal) {
-                terminal.reset(); // 使用reset完全重置终端状态
+                // 只在内容不为空时才清空和重写
                 if (terminalHistories[termId]) {
+                    terminal.clear();
                     terminal.write(terminalHistories[termId]);
                 }
             }
