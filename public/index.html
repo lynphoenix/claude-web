@@ -127,7 +127,14 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
+        // 获取或生成用户ID
+        let userId = localStorage.getItem('terminal_userId');
+        if (!userId) {
+            userId = 'user_' + Math.random().toString(36).substr(2, 9);
+            localStorage.setItem('terminal_userId', userId);
+        }
+
+        const socket = io({ query: { userId } });
         let currentTermId = null;
         let terminal = null;
         let fitAddon = null;
@@ -175,9 +182,18 @@
         });
 
         socket.on('terminal-created', (data) => {
-            const { termId, isInitial } = data;
+            const { termId, isInitial, isRestored } = data;
             createTab(termId);
             if (isInitial && !terminal) initTerminal();
+        });
+
+        socket.on('terminals-restored', (data) => {
+            const { termIds, active } = data;
+            termIds.forEach(termId => {
+                createTab(termId);
+            });
+            if (!terminal) initTerminal();
+            switchTab(active);
         });
 
         socket.on('terminal-output', (data) => {

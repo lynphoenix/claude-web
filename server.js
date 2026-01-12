@@ -16,15 +16,18 @@ const io = socketIO(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// 存储所有终端会话
-// 结构: { socketId: { id, term, socket } }
+// 存储所有终端会话（持久化）
+// 结构: { termId: { id, term, userId } }
 const terminals = {};
-// 存储每个socket的终端列表
-// 结构: { socketId: [termId1, termId2, ...] }
+// 存储每个用户的终端列表
+// 结构: { userId: [termId1, termId2, ...] }
 const userTerminals = {};
 // 当前活动的终端
 // 结构: { socketId: currentTermId }
 const activeTerminals = {};
+// socket到user的映射
+// 结构: { socketId: userId }
+const socketToUser = {};
 
 let termCounter = 0;
 
@@ -37,13 +40,12 @@ app.get('/', (req, res) => {
 });
 
 // 创建新的终端会话
-function createTerminal(socket, shell = 'bash', options = {}) {
+function createTerminal(userId, socket, shell = 'bash', options = {}) {
   const termId = 'term_' + (++termCounter);
-  const socketId = socket.id;
 
   // 初始化用户终端列表
-  if (!userTerminals[socketId]) {
-    userTerminals[socketId] = [];
+  if (!userTerminals[userId]) {
+    userTerminals[userId] = [];
   }
 
   // 根据操作系统选择默认shell
@@ -67,41 +69,45 @@ function createTerminal(socket, shell = 'bash', options = {}) {
     ...options
   });
 
-  // 存储终端信息
+  // 存储终端信息（持久化）
   terminals[termId] = {
     id: termId,
     term: term,
-    socket: socket,
-    socketId: socketId
+    userId: userId
   };
 
-  userTerminals[socketId].push(termId);
+  userTerminals[userId].push(termId);
 
   // 设置当前活动终端
-  activeTerminals[socketId] = termId;
+  activeTerminals[socket.id] = termId;
 
-  // 终端输出处理
+  // 终端输出处理 - 需要动态发送到当前连接的socket
   term.onData((data) => {
-    socket.emit('terminal-output', { termId, data });
+    // 找到该用户当前连接的socket并发送
+    const currentSocketId = Object.keys(socketToUser).find(sid => socketToUser[sid] === userId);
+    if (currentSocketId) {
+      const targetSocket = io.sockets.sockets.get(currentSocketId);
+      if (targetSocket) {
+        targetSocket.emit('terminal-output', { termId, data });
+      }
+    }
   });
 
   // 终端退出处理
   term.onExit(({ exitCode, signal }) => {
-    socket.emit('terminal-closed', { termId, exitCode, signal });
-
-    // 从用户列表中移除
-    const idx = userTerminals[socketId].indexOf(termId);
-    if (idx > -1) {
-      userTerminals[socketId].splice(idx, 1);
+    // 找到该用户当前连接的socket并发送关闭事件
+    const currentSocketId = Object.keys(socketToUser).find(sid => socketToUser[sid] === userId);
+    if (currentSocketId) {
+      const targetSocket = io.sockets.sockets.get(currentSocketId);
+      if (targetSocket) {
+        targetSocket.emit('terminal-closed', { termId, exitCode, signal });
+      }
     }
 
-    // 如果是当前活动终端，切换到其他终端或清空
-    if (activeTerminals[socketId] === termId) {
-      if (userTerminals[socketId].length > 0) {
-        activeTerminals[socketId] = userTerminals[socketId][0];
-      } else {
-        delete activeTerminals[socketId];
-      }
+    // 从用户列表中移除
+    const idx = userTerminals[userId].indexOf(termId);
+    if (idx > -1) {
+      userTerminals[userId].splice(idx, 1);
     }
 
     delete terminals[termId];
@@ -113,16 +119,37 @@ function createTerminal(socket, shell = 'bash', options = {}) {
 // Socket.IO 连接处理
 io.on('connection', (socket) => {
   const socketId = socket.id;
-  console.log('Client connected:', socketId);
+  // 使用简单的用户ID（实际应用中应该用认证）
+  const userId = 'user_' + socket.handshake.query.userId || 'user_default';
+  socketToUser[socketId] = userId;
 
-  // 初始化时创建一个默认终端
-  const initialTermId = createTerminal(socket);
-  socket.emit('terminal-created', { termId: initialTermId, isInitial: true });
+  console.log('Client connected:', socketId, 'as user:', userId);
+
+  // 检查用户是否已有终端
+  const existingTerms = userTerminals[userId] || [];
+  if (existingTerms.length > 0) {
+    // 用户已有终端，恢复连接
+    existingTerms.forEach(termId => {
+      const terminal = terminals[termId];
+      if (terminal) {
+        socket.emit('terminal-created', { termId, isRestored: true });
+      }
+    });
+    activeTerminals[socketId] = existingTerms[0];
+    socket.emit('terminals-restored', {
+      termIds: existingTerms,
+      active: existingTerms[0]
+    });
+  } else {
+    // 新用户，创建默认终端
+    const initialTermId = createTerminal(userId, socket);
+    socket.emit('terminal-created', { termId: initialTermId, isInitial: true });
+  }
 
   // 创建新终端
   socket.on('create-terminal', (data) => {
     const { shell, options } = data || {};
-    const termId = createTerminal(socket, shell, options);
+    const termId = createTerminal(userId, socket, shell, options);
     socket.emit('terminal-created', { termId });
   });
 
@@ -139,7 +166,7 @@ io.on('connection', (socket) => {
   socket.on('terminal-input', (data) => {
     const { termId, input } = data;
     const terminal = terminals[termId];
-    if (terminal && terminal.socketId === socketId) {
+    if (terminal && terminal.userId === userId) {
       terminal.term.write(input);
     }
   });
@@ -148,7 +175,7 @@ io.on('connection', (socket) => {
   socket.on('terminal-resize', (data) => {
     const { termId, cols, rows } = data;
     const terminal = terminals[termId];
-    if (terminal && terminal.socketId === socketId) {
+    if (terminal && terminal.userId === userId) {
       terminal.term.resize(cols, rows);
     }
   });
@@ -157,14 +184,14 @@ io.on('connection', (socket) => {
   socket.on('close-terminal', (data) => {
     const { termId } = data;
     const terminal = terminals[termId];
-    if (terminal && terminal.socketId === socketId) {
+    if (terminal && terminal.userId === userId) {
       terminal.term.kill();
     }
   });
 
   // 获取终端列表
   socket.on('get-terminals', () => {
-    const terms = userTerminals[socketId] || [];
+    const terms = userTerminals[userId] || [];
     const activeTerm = activeTerminals[socketId];
     socket.emit('terminals-list', {
       terminals: terms.map(id => ({
@@ -175,22 +202,12 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 断开连接
+  // 断开连接 - 不再关闭terminal，保持常驻
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socketId);
-
-    // 关闭该用户的所有终端
-    const terms = userTerminals[socketId] || [];
-    terms.forEach(termId => {
-      const terminal = terminals[termId];
-      if (terminal) {
-        terminal.term.kill();
-        delete terminals[termId];
-      }
-    });
-
-    delete userTerminals[socketId];
+    delete socketToUser[socketId];
     delete activeTerminals[socketId];
+    // 不再关闭terminal，terminal会继续运行
   });
 });
 
