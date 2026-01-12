@@ -50,9 +50,11 @@ function createTerminal(shell = 'bash', options = {}) {
     defaultShell = 'cmd.exe';
   } else if (platform === 'linux' || platform === 'darwin') {
     defaultShell = process.env.SHELL || '/bin/bash';
+    // 以登录模式启动shell，加载完整环境变量（.bash_profile, .profile等）
+    shellArgs = ['-l'];
   }
 
-  // 创建PTY
+  // 创建PTY，确保加载用户环境
   const term = pty.spawn(defaultShell, shellArgs, {
     name: 'xterm-color',
     cols: 80,
