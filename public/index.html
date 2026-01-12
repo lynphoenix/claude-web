@@ -192,8 +192,8 @@
         let currentTermId = null;
         let terminal = null;
         let fitAddon = null;
-        // 存储待写入的历史记录
-        const pendingHistory = {};
+        // 存储所有终端的完整历史
+        const terminalHistories = {};
         // 当前布局模式
         let layoutMode = 'tab';
         // 存储所有终端实例（平铺模式需要）
@@ -229,10 +229,9 @@
                 document.getElementById('dimensions').textContent = cols + 'x' + rows;
                 if (currentTermId) {
                     socket.emit('terminal-resize', { termId: currentTermId, cols, rows });
-                    // 写入待处理的历史记录
-                    if (pendingHistory[currentTermId]) {
-                        terminal.write(pendingHistory[currentTermId]);
-                        delete pendingHistory[currentTermId];
+                    // 写入当前终端的历史记录
+                    if (terminalHistories[currentTermId]) {
+                        terminal.write(terminalHistories[currentTermId]);
                     }
                 }
             }, 100);
@@ -318,9 +317,8 @@
                 const { cols, rows } = term;
                 socket.emit('terminal-resize', { termId, cols, rows });
                 // 写入历史记录
-                if (pendingHistory[termId]) {
-                    term.write(pendingHistory[termId]);
-                    delete pendingHistory[termId];
+                if (terminalHistories[termId]) {
+                    term.write(terminalHistories[termId]);
                 }
             }, 100);
 
@@ -402,6 +400,12 @@
 
         socket.on('terminal-output', (data) => {
             const { termId, data: output } = data;
+            // 保存到历史记录
+            if (!terminalHistories[termId]) {
+                terminalHistories[termId] = '';
+            }
+            terminalHistories[termId] += output;
+
             if (layoutMode === 'tile') {
                 // 平铺模式：发送到对应终端
                 if (terminals[termId]) {
@@ -418,19 +422,18 @@
         socket.on('terminal-history', (data) => {
             const { termId, history } = data;
             if (history) {
+                // 保存完整历史
+                terminalHistories[termId] = history;
+
                 if (layoutMode === 'tile') {
                     // 平铺模式
                     if (terminals[termId]) {
                         terminals[termId].term.write(history);
-                    } else {
-                        pendingHistory[termId] = history;
                     }
                 } else {
-                    // Tab模式
+                    // Tab模式：只显示当前终端的历史
                     if (terminal && termId === currentTermId) {
                         terminal.write(history);
-                    } else {
-                        pendingHistory[termId] = history;
                     }
                 }
             }
@@ -442,6 +445,10 @@
             // 删除平铺模式的终端实例
             if (terminals[termId]) {
                 delete terminals[termId];
+            }
+            // 删除历史记录
+            if (terminalHistories[termId]) {
+                delete terminalHistories[termId];
             }
             // 更新terminalIds列表
             terminalIds = terminalIds.filter(id => id !== termId);
@@ -471,11 +478,12 @@
             document.getElementById('tab-' + termId).classList.add('active');
             currentTermId = termId;
             socket.emit('switch-terminal', { termId });
-            // 如果有待处理的历史记录，写入终端
-            if (terminal && pendingHistory[termId]) {
-                terminal.clear(); // 先清空终端
-                terminal.write(pendingHistory[termId]);
-                delete pendingHistory[termId];
+            // 清空终端并写入该终端的历史
+            if (terminal) {
+                terminal.clear();
+                if (terminalHistories[termId]) {
+                    terminal.write(terminalHistories[termId]);
+                }
             }
         }
 
