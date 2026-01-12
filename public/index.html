@@ -486,7 +486,7 @@
         function closeTerminal(termId, event) {
             event.stopPropagation();
             socket.emit('close-terminal', { termId });
-            removeTab(termId);
+            // 不在这里调用removeTab，等待服务器的terminal-closed事件
         }
 
         function removeTab(termId) {
