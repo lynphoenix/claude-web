@@ -292,7 +292,7 @@
 
             const header = document.createElement('div');
             header.className = 'terminal-header';
-            header.innerHTML = `<span>Term ${termId.split('_')[1]}</span>`;
+            header.innerHTML = `<span>Term ${termId.split('_')[1]}</span><span style="cursor:pointer;opacity:0.7;padding:2px 6px;" onclick="closeTerminal('${termId}', event)">✕</span>`;
 
             const content = document.createElement('div');
             content.className = 'terminal-content';
