@@ -183,12 +183,18 @@
 
         socket.on('terminal-created', (data) => {
             const { termId, isInitial, isRestored } = data;
-            createTab(termId);
-            if (isInitial && !terminal) initTerminal();
+            // 只在初始创建时创建tab，恢复时跳过（由terminals-restored处理）
+            if (isInitial) {
+                createTab(termId);
+                if (!terminal) initTerminal();
+            }
         });
 
         socket.on('terminals-restored', (data) => {
             const { termIds, active } = data;
+            // 清空现有tabs
+            document.getElementById('tabsContainer').innerHTML = '';
+            // 创建所有tab
             termIds.forEach(termId => {
                 createTab(termId);
             });
