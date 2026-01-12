@@ -138,6 +138,8 @@
         let currentTermId = null;
         let terminal = null;
         let fitAddon = null;
+        // 存储待写入的历史记录
+        const pendingHistory = {};
 
         function initTerminal() {
             terminal = new Terminal({
@@ -167,6 +169,11 @@
                 document.getElementById('dimensions').textContent = cols + 'x' + rows;
                 if (currentTermId) {
                     socket.emit('terminal-resize', { termId: currentTermId, cols, rows });
+                    // 写入待处理的历史记录
+                    if (pendingHistory[currentTermId]) {
+                        terminal.write(pendingHistory[currentTermId]);
+                        delete pendingHistory[currentTermId];
+                    }
                 }
             }, 100);
         }
@@ -205,8 +212,14 @@
 
         socket.on('terminal-history', (data) => {
             const { termId, history } = data;
-            if (terminal && history) {
-                terminal.write(history);
+            if (history) {
+                if (terminal && termId === currentTermId) {
+                    // 终端已初始化，直接写入
+                    terminal.write(history);
+                } else {
+                    // 终端未初始化，存储待写入
+                    pendingHistory[termId] = history;
+                }
             }
         });
 
@@ -235,6 +248,12 @@
             document.getElementById('tab-' + termId).classList.add('active');
             currentTermId = termId;
             socket.emit('switch-terminal', { termId });
+            // 如果有待处理的历史记录，写入终端
+            if (terminal && pendingHistory[termId]) {
+                terminal.clear(); // 先清空终端
+                terminal.write(pendingHistory[termId]);
+                delete pendingHistory[termId];
+            }
         }
 
         function createNewTerminal() {
