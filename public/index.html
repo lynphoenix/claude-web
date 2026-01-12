@@ -298,9 +298,9 @@
                 // 切换回tab模式时，确保当前终端有实例
                 if (!terminal && currentTermId) {
                     initTerminal();
-                    if (pendingHistory[currentTermId]) {
-                        terminal.write(pendingHistory[currentTermId]);
-                        delete pendingHistory[currentTermId];
+                    if (terminalHistories[currentTermId]) {
+                        terminal.clear();
+                        terminal.write(terminalHistories[currentTermId]);
                     }
                 }
             }
