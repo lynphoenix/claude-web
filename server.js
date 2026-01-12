@@ -4,6 +4,7 @@ const socketIO = require('socket.io');
 const pty = require('node-pty');
 const path = require('path');
 const os = require('os');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,6 +16,9 @@ const io = socketIO(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// 历史数据持久化文件
+const HISTORY_FILE = path.join(__dirname, '.terminal_history.json');
 
 // 全局共享的终端会话
 // 结构: { termId: { id, term, history } }
@@ -28,6 +32,41 @@ let activeTermId = null;
 const MAX_HISTORY_SIZE = 100000; // 100KB
 
 let termCounter = 0;
+
+// 加载历史数据
+function loadHistory() {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const data = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+      termCounter = data.termCounter || 0;
+      return data.histories || {};
+    }
+  } catch (err) {
+    console.log('No history file found or error loading:', err.message);
+  }
+  return {};
+}
+
+// 保存历史数据
+function saveHistory() {
+  const histories = {};
+  Object.keys(terminals).forEach(termId => {
+    histories[termId] = terminals[termId].history || '';
+  });
+  const data = {
+    termCounter,
+    histories,
+    timestamp: Date.now()
+  };
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify(data), 'utf8');
+}
+
+// 定期保存历史（每30秒）
+setInterval(() => {
+  if (Object.keys(terminals).length > 0) {
+    saveHistory();
+  }
+}, 30000);
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));
@@ -202,6 +241,32 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socketId, 'Remaining clients:', io.sockets.sockets.size);
   });
+});
+
+// 启动时加载历史数据
+const savedHistories = loadHistory();
+if (Object.keys(savedHistories).length > 0) {
+  console.log(`Found ${Object.keys(savedHistories).length} saved terminal histories`);
+}
+
+// 优雅退出时保存历史
+process.on('SIGINT', () => {
+  console.log('Saving history before exit...');
+  saveHistory();
+  // 关闭所有终端
+  Object.values(terminals).forEach(t => {
+    try { t.term.kill(); } catch(e) {}
+  });
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Saving history before exit...');
+  saveHistory();
+  Object.values(terminals).forEach(t => {
+    try { t.term.kill(); } catch(e) {}
+  });
+  process.exit(0);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
