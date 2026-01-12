@@ -203,6 +203,13 @@
             }
         });
 
+        socket.on('terminal-history', (data) => {
+            const { termId, history } = data;
+            if (terminal && history) {
+                terminal.write(history);
+            }
+        });
+
         socket.on('terminal-closed', (data) => {
             const { termId } = data;
             removeTab(termId);

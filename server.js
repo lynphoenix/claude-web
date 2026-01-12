@@ -17,7 +17,7 @@ const io = socketIO(server, {
 const PORT = process.env.PORT || 3000;
 
 // 存储所有终端会话（持久化）
-// 结构: { termId: { id, term, userId } }
+// 结构: { termId: { id, term, userId, history } }
 const terminals = {};
 // 存储每个用户的终端列表
 // 结构: { userId: [termId1, termId2, ...] }
@@ -31,6 +31,9 @@ const socketToUser = {};
 // user到当前socket的映射（用于发送终端输出）
 // 结构: { userId: socketId }
 const userToSocket = {};
+
+// 终端历史记录最大缓存大小（字符数）
+const MAX_HISTORY_SIZE = 100000; // 100KB
 
 let termCounter = 0;
 
@@ -72,11 +75,12 @@ function createTerminal(userId, socket, shell = 'bash', options = {}) {
     ...options
   });
 
-  // 存储终端信息（持久化）
+  // 存储终端信息（持久化，包含历史记录）
   terminals[termId] = {
     id: termId,
     term: term,
-    userId: userId
+    userId: userId,
+    history: '' // 缓存终端输出历史
   };
 
   userTerminals[userId].push(termId);
@@ -86,14 +90,24 @@ function createTerminal(userId, socket, shell = 'bash', options = {}) {
   // 更新用户到socket的映射
   userToSocket[userId] = socket.id;
 
-  // 终端输出处理
+  // 终端输出处理 - 同时发送并缓存历史
   term.onData((data) => {
-    // 使用userToSocket映射找到当前socket
-    const currentSocketId = userToSocket[userId];
-    if (currentSocketId) {
-      const targetSocket = io.sockets.sockets.get(currentSocketId);
-      if (targetSocket) {
-        targetSocket.emit('terminal-output', { termId, data });
+    // 缓存输出历史
+    const terminal = terminals[termId];
+    if (terminal) {
+      terminal.history += data;
+      // 限制历史记录大小
+      if (terminal.history.length > MAX_HISTORY_SIZE) {
+        terminal.history = terminal.history.slice(-MAX_HISTORY_SIZE);
+      }
+
+      // 使用userToSocket映射找到当前socket并发送
+      const currentSocketId = userToSocket[userId];
+      if (currentSocketId) {
+        const targetSocket = io.sockets.sockets.get(currentSocketId);
+        if (targetSocket) {
+          targetSocket.emit('terminal-output', { termId, data });
+        }
       }
     }
   });
@@ -135,11 +149,15 @@ io.on('connection', (socket) => {
   // 检查用户是否已有终端
   const existingTerms = userTerminals[userId] || [];
   if (existingTerms.length > 0) {
-    // 用户已有终端，恢复连接
+    // 用户已有终端，恢复连接并发送历史
     existingTerms.forEach(termId => {
       const terminal = terminals[termId];
       if (terminal) {
         socket.emit('terminal-created', { termId, isRestored: true });
+        // 发送历史记录
+        if (terminal.history) {
+          socket.emit('terminal-history', { termId, history: terminal.history });
+        }
       }
     });
     activeTerminals[socketId] = existingTerms[0];
