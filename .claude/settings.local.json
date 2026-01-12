@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(du:*)",
+      "Bash(ssh root@WX-H100 \"hostname && pwd && ls -la\")",
+      "Bash(ssh root@WX-H100:*)",
+      "Bash(git init:*)",
+      "Bash(git config:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
