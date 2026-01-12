@@ -298,10 +298,7 @@
                 // 切换回tab模式时，确保当前终端有实例
                 if (!terminal && currentTermId) {
                     initTerminal();
-                    if (terminalHistories[currentTermId]) {
-                        terminal.clear();
-                        terminal.write(terminalHistories[currentTermId]);
-                    }
+                    // 不在这里写入历史，等待服务器发送
                 }
             }
         }
@@ -549,15 +546,13 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             const tab = document.getElementById('tab-' + termId);
             if (tab) tab.classList.add('active');
-            currentTermId = termId;
-            socket.emit('switch-terminal', { termId });
-            // 清空终端并写入该终端的历史
-            if (terminal) {
-                // 只在内容不为空时才清空和重写
-                if (terminalHistories[termId]) {
-                    terminal.clear();
-                    terminal.write(terminalHistories[termId]);
-                }
+
+            // 如果切换到不同的终端
+            if (currentTermId !== termId) {
+                currentTermId = termId;
+                socket.emit('switch-terminal', { termId });
+                // 请求服务器发送该终端的历史
+                // 不在客户端直接重写历史，让服务器处理
             }
         }
 
