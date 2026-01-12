@@ -28,6 +28,9 @@ const activeTerminals = {};
 // socket到user的映射
 // 结构: { socketId: userId }
 const socketToUser = {};
+// user到当前socket的映射（用于发送终端输出）
+// 结构: { userId: socketId }
+const userToSocket = {};
 
 let termCounter = 0;
 
@@ -80,11 +83,13 @@ function createTerminal(userId, socket, shell = 'bash', options = {}) {
 
   // 设置当前活动终端
   activeTerminals[socket.id] = termId;
+  // 更新用户到socket的映射
+  userToSocket[userId] = socket.id;
 
-  // 终端输出处理 - 需要动态发送到当前连接的socket
+  // 终端输出处理
   term.onData((data) => {
-    // 找到该用户当前连接的socket并发送
-    const currentSocketId = Object.keys(socketToUser).find(sid => socketToUser[sid] === userId);
+    // 使用userToSocket映射找到当前socket
+    const currentSocketId = userToSocket[userId];
     if (currentSocketId) {
       const targetSocket = io.sockets.sockets.get(currentSocketId);
       if (targetSocket) {
@@ -96,7 +101,7 @@ function createTerminal(userId, socket, shell = 'bash', options = {}) {
   // 终端退出处理
   term.onExit(({ exitCode, signal }) => {
     // 找到该用户当前连接的socket并发送关闭事件
-    const currentSocketId = Object.keys(socketToUser).find(sid => socketToUser[sid] === userId);
+    const currentSocketId = userToSocket[userId];
     if (currentSocketId) {
       const targetSocket = io.sockets.sockets.get(currentSocketId);
       if (targetSocket) {
@@ -120,8 +125,10 @@ function createTerminal(userId, socket, shell = 'bash', options = {}) {
 io.on('connection', (socket) => {
   const socketId = socket.id;
   // 使用简单的用户ID（实际应用中应该用认证）
-  const userId = 'user_' + socket.handshake.query.userId || 'user_default';
+  const userId = 'user_' + (socket.handshake.query.userId || 'default');
   socketToUser[socketId] = userId;
+  // 更新用户到socket的映射
+  userToSocket[userId] = socketId;
 
   console.log('Client connected:', socketId, 'as user:', userId);
 
@@ -205,8 +212,14 @@ io.on('connection', (socket) => {
   // 断开连接 - 不再关闭terminal，保持常驻
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socketId);
+    const userId = socketToUser[socketId];
+    // 清理映射
     delete socketToUser[socketId];
     delete activeTerminals[socketId];
+    // 如果这个socket是该用户当前的socket，清理userToSocket
+    if (userId && userToSocket[userId] === socketId) {
+      delete userToSocket[userId];
+    }
     // 不再关闭terminal，terminal会继续运行
   });
 });
